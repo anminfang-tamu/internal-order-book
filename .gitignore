@@ -1,0 +1,21 @@
+# Build
+/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled Object files
+*.o
+*.obj
+*.so
+*.dll
+*.exe
+*.out
+
+# Editor files
+*.swp
+*~
+
+# Test binaries
+/tests/bin/ 

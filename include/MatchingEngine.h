@@ -11,20 +11,16 @@ public:
     MatchingEngine();
     ~MatchingEngine();
 
-    void process_order(Order &order)
-    {
-        match_orders(order);
-    }
+    void process_order(Order &order);
 
 private:
     OrderQueue order_queue_;
     std::mutex order_queue_mutex_;
     std::condition_variable order_queue_cv_;
     bool stop_matching_engine_ = false;
+    std::thread matching_engine_thread_;
 
     OrderBook order_book_;
 
-    void order_producer_thread(Order &order);
-
-    void match_orders(Order &order);
+    void match_loop();
 };

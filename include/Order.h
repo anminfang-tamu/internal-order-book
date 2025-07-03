@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <chrono>
 #include "Strategy.h"
 
 enum class OrderType
@@ -27,6 +28,7 @@ class Order
 {
 public:
     Order(Strategy strategy, int quantity, double price, OrderSide side, OrderType type);
+    Order();
     ~Order();
 
     uint64_t get_id() const;

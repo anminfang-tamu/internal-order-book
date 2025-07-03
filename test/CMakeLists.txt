@@ -1,20 +1,18 @@
-# Download and unpack GoogleTest at configure time
-configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
-execute_process(COMMAND 
-  ${CMAKE_COMMAND} -G "Unix Makefiles" .
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
-execute_process(COMMAND 
-  ${CMAKE_COMMAND} --build .
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/googletest-download )
+cmake_minimum_required(VERSION 3.14)
 
-# Add googletest directly to our build. This defines the gtest and gtest_main targets.
-add_subdirectory(${CMAKE_BINARY_DIR}/googletest-src
-                 ${CMAKE_BINARY_DIR}/googletest-build
-                 EXCLUDE_FROM_ALL)
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        v1.14.0
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
 
 # Now add the test executable
-add_executable(orderbook_tests test_orderbook.cpp)
-target_link_libraries(orderbook_tests orderbook gtest_main)
+add_executable(orderbook_tests test_orderbook.cpp ../src/Order.cpp)
+target_link_libraries(orderbook_tests gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(orderbook_tests) 

@@ -24,6 +24,8 @@ public:
     OrderQueue get_bids(double price) const;
     OrderQueue get_asks(double price) const;
 
+    void match_orders(Order &order);
+
 private:
     std::map<double, OrderQueue, std::greater<double>> bids;
     std::map<double, OrderQueue, std::less<double>> asks;

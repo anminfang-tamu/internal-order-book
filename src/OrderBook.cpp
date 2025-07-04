@@ -1,4 +1,5 @@
 #include "OrderBook.h"
+#include <stdexcept>
 
 OrderBook::OrderBook()
 {
@@ -12,31 +13,70 @@ OrderBook::~OrderBook()
 
 void OrderBook::add_order(Order &order)
 {
-    add_order_to_book(order, bids);
+    if (order.get_side() == OrderSide::BUY)
+    {
+        bids[order.get_price()].push_back(order);
+    }
+    else
+    {
+        asks[order.get_price()].push_back(order);
+    }
 }
 
 void OrderBook::remove_order(Order &order)
 {
-    remove_order_from_book(order, bids);
+    if (order.get_side() == OrderSide::BUY)
+    {
+        remove_order_from_book(order);
+    }
+    else
+    {
+        auto it = asks.find(order.get_price());
+        if (it != asks.end())
+        {
+            auto &queue = it->second;
+            for (auto queue_it = queue.begin(); queue_it != queue.end(); ++queue_it)
+            {
+                if (queue_it->get_id() == order.get_id())
+                {
+                    queue.erase(queue_it);
+                    break;
+                }
+            }
+            if (queue.empty())
+            {
+                asks.erase(it);
+            }
+        }
+    }
 }
 
 void OrderBook::update_order(Order &order)
 {
-    update_order_in_book(order, bids, order.get_side());
+    remove_order(order); // Remove the old version
+    add_order(order);    // Add the updated version
 }
 
 void OrderBook::cancel_order(Order &order)
 {
-    remove_order_from_book(order, bids);
+    remove_order(order); // Reuse the remove_order logic
 }
 
 double OrderBook::get_best_bid() const
 {
+    if (bids.empty())
+    {
+        throw std::runtime_error("No bids available");
+    }
     return bids.begin()->first;
 }
 
 double OrderBook::get_best_ask() const
 {
+    if (asks.empty())
+    {
+        throw std::runtime_error("No asks available");
+    }
     return asks.begin()->first;
 }
 
@@ -60,37 +100,75 @@ OrderQueue OrderBook::get_asks(double price) const
     return OrderQueue();
 }
 
-void OrderBook::add_order_to_book(Order &order, std::map<double, OrderQueue, std::greater<double>> &book)
+void OrderBook::add_order_to_book(Order &order)
 {
-    book[order.get_price()].push_back(order);
+    if (order.get_side() == OrderSide::BUY)
+    {
+        bids[order.get_price()].push_back(order);
+    }
+    else
+    {
+        asks[order.get_price()].push_back(order);
+    }
 }
 
-void OrderBook::remove_order_from_book(Order &order, std::map<double, OrderQueue, std::greater<double>> &book)
+void OrderBook::remove_order_from_book(Order &order)
 {
-    auto it = book.find(order.get_price());
-    if (it != book.end())
+    if (order.get_side() == OrderSide::BUY)
     {
-        auto &queue = it->second;
-        for (auto it = queue.begin(); it != queue.end(); ++it)
+        auto it = bids.find(order.get_price());
+        if (it != bids.end())
         {
-            if (it->get_id() == order.get_id())
+            auto &queue = it->second;
+            for (auto it = queue.begin(); it != queue.end(); ++it)
             {
-                queue.erase(it);
-                break;
+                if (it->get_id() == order.get_id())
+                {
+                    queue.erase(it);
+                    break;
+                }
+            }
+
+            if (queue.empty())
+            {
+                bids.erase(it);
             }
         }
-
-        if (queue.empty())
+        else
         {
-            book.erase(it);
+            auto it = asks.find(order.get_price());
+            if (it != asks.end())
+            {
+                auto &queue = it->second;
+                for (auto it = queue.begin(); it != queue.end(); ++it)
+                {
+                    if (it->get_id() == order.get_id())
+                    {
+                        queue.erase(it);
+                        break;
+                    }
+                }
+                if (queue.empty())
+                {
+                    asks.erase(it);
+                }
+            }
         }
     }
 }
 
-void OrderBook::update_order_in_book(Order &order, std::map<double, OrderQueue, std::greater<double>> &book, OrderSide side)
+void OrderBook::update_order_in_book(Order &order)
 {
-    remove_order_from_book(order, book);
-    add_order_to_book(order, book);
+    if (order.get_side() == OrderSide::BUY)
+    {
+        remove_order_from_book(order);
+        add_order_to_book(order);
+    }
+    else
+    {
+        remove_order_from_book(order);
+        add_order_to_book(order);
+    }
 }
 
 void OrderBook::match_orders(Order &incoming_order)
@@ -174,7 +252,7 @@ void OrderBook::match_orders(Order &incoming_order)
         }
     }
 
-    // add unfill order to book
+    // add unfilled order to book
     if (incoming_order.get_quantity() > 0 && incoming_order.get_type() == OrderType::LIMIT)
     {
         add_order(incoming_order);

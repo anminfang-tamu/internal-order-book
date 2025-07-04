@@ -30,7 +30,7 @@ private:
     std::map<double, OrderQueue, std::greater<double>> bids;
     std::map<double, OrderQueue, std::less<double>> asks;
 
-    void add_order_to_book(Order &order, std::map<double, OrderQueue, std::greater<double>> &book);
-    void remove_order_from_book(Order &order, std::map<double, OrderQueue, std::greater<double>> &book);
-    void update_order_in_book(Order &order, std::map<double, OrderQueue, std::greater<double>> &book, OrderSide side);
+    void add_order_to_book(Order &order);
+    void remove_order_from_book(Order &order);
+    void update_order_in_book(Order &order);
 };

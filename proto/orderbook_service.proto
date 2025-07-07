@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package orderbook;
+
+// Order side enumeration
+enum OrderSide {
+  ORDER_SIDE_UNKNOWN = 0;
+  ORDER_SIDE_BUY = 1;
+  ORDER_SIDE_SELL = 2;
+}
+
+// Order type enumeration
+enum OrderType {
+  ORDER_TYPE_UNKNOWN = 0;
+  ORDER_TYPE_MARKET = 1;
+  ORDER_TYPE_LIMIT = 2;
+}
+
+// Order status enumeration
+enum OrderStatus {
+  ORDER_STATUS_UNKNOWN = 0;
+  ORDER_STATUS_PENDING = 1;
+  ORDER_STATUS_FILLED = 2;
+  ORDER_STATUS_CANCELLED = 3;
+  ORDER_STATUS_REJECTED = 4;
+}
+
+// Strategy enumeration
+enum Strategy {
+  STRATEGY_UNKNOWN = 0;
+  STRATEGY_QUANT_LONG_TERM = 1;
+  STRATEGY_HIGH_FREQUENCY = 2;
+  STRATEGY_HEDGE_FUND = 3;
+  STRATEGY_ALGORITHMIC_TRADING = 4;
+  STRATEGY_INVESTMENT_BANK = 5;
+  STRATEGY_PENSION_FUND = 6;
+  STRATEGY_INSURANCE_COMPANY = 7;
+  STRATEGY_OTHER = 8;
+}
+
+// Order message
+message Order {
+  uint64 id = 1;
+  Strategy strategy = 2;
+  int32 quantity = 3;
+  double price = 4;
+  OrderSide side = 5;
+  OrderType type = 6;
+  OrderStatus status = 7;
+  int64 created_at = 8; // Unix timestamp in microseconds
+}
+
+// Request to submit a new order
+message SubmitOrderRequest {
+  Strategy strategy = 1;
+  int32 quantity = 2;
+  double price = 3;
+  OrderSide side = 4;
+  OrderType type = 5;
+}
+
+// Response for order submission
+message SubmitOrderResponse {
+  bool success = 1;
+  string message = 2;
+  uint64 order_id = 3;
+}
+
+// Request to get best bid price
+message GetBestBidRequest {
+  // Empty - no parameters needed
+}
+
+// Response with best bid price
+message GetBestBidResponse {
+  bool success = 1;
+  double price = 2;
+  string message = 3;
+}
+
+// Request to get best ask price
+message GetBestAskRequest {
+  // Empty - no parameters needed
+}
+
+// Response with best ask price
+message GetBestAskResponse {
+  bool success = 1;
+  double price = 2;
+  string message = 3;
+}
+
+// Request to get orders at specific price level
+message GetOrdersAtPriceRequest {
+  double price = 1;
+  OrderSide side = 2;
+}
+
+// Response with orders at price level
+message GetOrdersAtPriceResponse {
+  bool success = 1;
+  repeated Order orders = 2;
+  string message = 3;
+}
+
+// Request to cancel an order
+message CancelOrderRequest {
+  uint64 order_id = 1;
+}
+
+// Response for order cancellation
+message CancelOrderResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Request for order book status/health check
+message HealthCheckRequest {
+  // Empty - no parameters needed
+}
+
+// Response for health check
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  int64 uptime_seconds = 3;
+  int32 active_orders = 4;
+  int64 total_orders_processed = 5;
+}
+
+// Performance statistics request
+message GetPerformanceStatsRequest {
+  // Empty - no parameters needed
+}
+
+// Performance statistics response
+message GetPerformanceStatsResponse {
+  bool success = 1;
+  int64 total_orders_processed = 2;
+  double orders_per_second_current = 3;
+  double orders_per_second_peak = 4;
+  int32 queue_depth_current = 5;
+  int32 queue_depth_max = 6;
+  int64 uptime_seconds = 7;
+}
+
+// OrderBook gRPC Service Definition
+service OrderBookService {
+  // Submit a new order to the order book
+  rpc SubmitOrder(SubmitOrderRequest) returns (SubmitOrderResponse);
+  
+  // Get the best bid price
+  rpc GetBestBid(GetBestBidRequest) returns (GetBestBidResponse);
+  
+  // Get the best ask price
+  rpc GetBestAsk(GetBestAskRequest) returns (GetBestAskResponse);
+  
+  // Get all orders at a specific price level
+  rpc GetOrdersAtPrice(GetOrdersAtPriceRequest) returns (GetOrdersAtPriceResponse);
+  
+  // Cancel an order by ID
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+  
+  // Health check endpoint
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // Get performance statistics
+  rpc GetPerformanceStats(GetPerformanceStatsRequest) returns (GetPerformanceStatsResponse);
+} 

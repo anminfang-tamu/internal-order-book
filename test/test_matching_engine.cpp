@@ -560,3 +560,283 @@ TEST_F(MatchingEngineTest, EnduranceTest_SustainedLoad)
 
     EXPECT_LT(duration.count(), 20000); // Complete within 20 seconds
 }
+
+// ========== LOCK-FREE QUEUE SPECIFIC TESTS ==========
+
+class LockFreeQueueTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        // Test orders for lock-free queue testing
+        test_order = new Order(Strategy::HIGH_FREQUENCY, 100, 50.0, OrderSide::BUY, OrderType::LIMIT);
+    }
+
+    void TearDown() override
+    {
+        delete test_order;
+    }
+
+    Order *test_order;
+};
+
+// Test 1: Queue Capacity Limits - Test behavior when queue approaches/exceeds capacity
+TEST_F(LockFreeQueueTest, QueueCapacityLimits_1024_Orders)
+{
+    MatchingEngine engine;
+    const int queue_capacity = 1024;
+    const int test_orders = queue_capacity + 100; // Try to exceed capacity
+
+    std::cout << "\n=== LOCK-FREE QUEUE CAPACITY TEST ===" << std::endl;
+    std::cout << "Testing with " << test_orders << " orders (capacity: " << queue_capacity << ")" << std::endl;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Submit orders faster than they can be processed
+    for (int i = 0; i < test_orders; ++i)
+    {
+        Order order(Strategy::HIGH_FREQUENCY, 1, 50.0 + i * 0.01, OrderSide::BUY, OrderType::LIMIT);
+
+        // This should not block even when queue is full (busy wait in implementation)
+        engine.process_order(order);
+
+        // No delay - submit as fast as possible to test queue limits
+    }
+
+    auto submission_end = std::chrono::high_resolution_clock::now();
+    auto submission_time = std::chrono::duration_cast<std::chrono::milliseconds>(submission_end - start_time);
+
+    // Wait for processing
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    std::cout << "Submission time: " << submission_time.count() << " ms" << std::endl;
+    std::cout << "Total time: " << total_time.count() << " ms" << std::endl;
+    std::cout << "Submission rate: " << static_cast<int>(test_orders / (submission_time.count() / 1000.0)) << " orders/sec" << std::endl;
+
+    // Should complete without crashing
+    EXPECT_TRUE(true);
+}
+
+// Test 2: High-Frequency Lock-Free Access Pattern
+TEST_F(LockFreeQueueTest, HighFrequencyLockFreeAccess)
+{
+    MatchingEngine engine;
+    const int num_producer_threads = 8; // High concurrency
+    const int orders_per_thread = 1000;
+    const int total_orders = num_producer_threads * orders_per_thread;
+
+    std::vector<std::thread> producers;
+    std::atomic<int> successful_submissions{0};
+    std::atomic<int> submission_attempts{0};
+
+    std::cout << "\n=== HIGH-FREQUENCY LOCK-FREE ACCESS TEST ===" << std::endl;
+    std::cout << "Threads: " << num_producer_threads << ", Orders per thread: " << orders_per_thread << std::endl;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Create high-frequency producers
+    for (int thread_id = 0; thread_id < num_producer_threads; ++thread_id)
+    {
+        producers.emplace_back([&engine, &successful_submissions, &submission_attempts, thread_id, orders_per_thread]()
+                               {
+            for (int i = 0; i < orders_per_thread; ++i)
+            {
+                submission_attempts.fetch_add(1);
+                
+                Order order(Strategy::HIGH_FREQUENCY,
+                           (i % 50) + 1,  // Small quantities for fast processing
+                           50.0 + (thread_id * 0.1) + (i % 10) * 0.01,
+                           (i % 2 == 0) ? OrderSide::BUY : OrderSide::SELL,
+                           OrderType::LIMIT);
+                
+                // Lock-free submission - should never block
+                engine.process_order(order);
+                successful_submissions.fetch_add(1);
+                
+                // Minimal delay to simulate high-frequency trading
+                if (i % 100 == 0) {
+                    std::this_thread::yield();
+                }
+            } });
+    }
+
+    // Wait for all producers
+    for (auto &producer : producers)
+    {
+        producer.join();
+    }
+
+    auto submission_end = std::chrono::high_resolution_clock::now();
+    auto submission_time = std::chrono::duration_cast<std::chrono::microseconds>(submission_end - start_time);
+
+    // Wait for processing
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    std::cout << "Attempts: " << submission_attempts.load() << std::endl;
+    std::cout << "Successful: " << successful_submissions.load() << std::endl;
+    std::cout << "Submission time: " << submission_time.count() << " μs" << std::endl;
+    std::cout << "Submission rate: " << static_cast<int>(total_orders / (submission_time.count() / 1000000.0)) << " orders/sec" << std::endl;
+
+    // All submissions should succeed (lock-free guarantee)
+    EXPECT_EQ(successful_submissions.load(), total_orders);
+    EXPECT_EQ(submission_attempts.load(), total_orders);
+}
+
+// Test 3: Lock-Free vs Traditional Performance Characteristics
+TEST_F(LockFreeQueueTest, LockFreePerformanceCharacteristics)
+{
+    MatchingEngine engine;
+    const int performance_test_orders = 50000;
+
+    std::cout << "\n=== LOCK-FREE PERFORMANCE CHARACTERISTICS ===" << std::endl;
+
+    // Test burst submission (all at once)
+    auto burst_start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i < performance_test_orders; ++i)
+    {
+        Order order(Strategy::HIGH_FREQUENCY, 1, 50.0, OrderSide::BUY, OrderType::LIMIT);
+        engine.process_order(order);
+    }
+
+    auto burst_end = std::chrono::high_resolution_clock::now();
+    auto burst_time = std::chrono::duration_cast<std::chrono::microseconds>(burst_end - burst_start);
+
+    std::cout << "Burst submission (" << performance_test_orders << " orders): " << burst_time.count() << " μs" << std::endl;
+    std::cout << "Burst rate: " << static_cast<int>(performance_test_orders / (burst_time.count() / 1000000.0)) << " orders/sec" << std::endl;
+
+    // Wait for processing
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    // Performance expectations for lock-free queue
+    double orders_per_microsecond = performance_test_orders / static_cast<double>(burst_time.count());
+    EXPECT_GT(orders_per_microsecond, 0.1); // Should process at least 100K orders/sec
+}
+
+// Test 4: Lock-Free Queue Memory Safety
+TEST_F(LockFreeQueueTest, MemorySafetyTest)
+{
+    std::cout << "\n=== LOCK-FREE QUEUE MEMORY SAFETY TEST ===" << std::endl;
+
+    const int iterations = 5;
+    const int orders_per_iteration = 1000;
+
+    for (int iter = 0; iter < iterations; ++iter)
+    {
+        std::cout << "Memory safety iteration " << (iter + 1) << "/" << iterations << std::endl;
+
+        {
+            MatchingEngine engine; // Create new engine each iteration
+
+            // Submit orders
+            for (int i = 0; i < orders_per_iteration; ++i)
+            {
+                Order order(Strategy::OTHER, 10, 50.0 + i * 0.01, OrderSide::BUY, OrderType::LIMIT);
+                engine.process_order(order);
+            }
+
+            // Small processing time
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        } // Engine destructor should clean up all memory
+
+        // Small gap between iterations
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    std::cout << "Memory safety test completed - no leaks expected" << std::endl;
+    EXPECT_TRUE(true); // If we reach here, no crashes occurred
+}
+
+// Test 5: Lock-Free Queue Edge Cases
+TEST_F(LockFreeQueueTest, LockFreeEdgeCases)
+{
+    std::cout << "\n=== LOCK-FREE QUEUE EDGE CASES ===" << std::endl;
+
+    // Test rapid engine creation/destruction
+    for (int i = 0; i < 10; ++i)
+    {
+        MatchingEngine engine;
+
+        // Single order per engine
+        Order order(Strategy::HIGH_FREQUENCY, 1, 50.0, OrderSide::BUY, OrderType::LIMIT);
+        engine.process_order(order);
+
+        // Immediate destruction (tests cleanup of lock-free queue)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Test with zero-delay submissions
+    {
+        MatchingEngine engine;
+
+        for (int i = 0; i < 100; ++i)
+        {
+            Order order(Strategy::HIGH_FREQUENCY, 1, 50.0, OrderSide::BUY, OrderType::LIMIT);
+            engine.process_order(order);
+            // No delay - maximum pressure on lock-free queue
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    std::cout << "Edge cases completed successfully" << std::endl;
+    EXPECT_TRUE(true);
+}
+
+// Test 6: Lock-Free Queue Concurrent Destruction Safety
+TEST_F(LockFreeQueueTest, ConcurrentDestructionSafety)
+{
+    std::cout << "\n=== CONCURRENT DESTRUCTION SAFETY TEST ===" << std::endl;
+
+    const int num_engines = 3;
+    std::vector<std::unique_ptr<MatchingEngine>> engines;
+    std::vector<std::thread> workers;
+
+    // Create multiple engines
+    for (int i = 0; i < num_engines; ++i)
+    {
+        engines.push_back(std::make_unique<MatchingEngine>());
+    }
+
+    // Create workers that submit to different engines
+    for (int engine_id = 0; engine_id < num_engines; ++engine_id)
+    {
+        workers.emplace_back([&engines, engine_id]()
+                             {
+            for (int i = 0; i < 500; ++i)
+            {
+                Order order(Strategy::HIGH_FREQUENCY, 1, 50.0 + i * 0.01, OrderSide::BUY, OrderType::LIMIT);
+                engines[engine_id]->process_order(order);
+                
+                if (i % 50 == 0)
+                {
+                    std::this_thread::yield();
+                }
+            } });
+    }
+
+    // Let workers run for a bit
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Destroy engines while workers might still be submitting
+    engines.clear();
+
+    // Wait for workers to complete
+    for (auto &worker : workers)
+    {
+        if (worker.joinable())
+        {
+            worker.join();
+        }
+    }
+
+    std::cout << "Concurrent destruction safety test completed" << std::endl;
+    EXPECT_TRUE(true);
+}

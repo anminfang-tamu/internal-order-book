@@ -28,6 +28,19 @@ Order::Order()
     this->created_at = std::chrono::system_clock::now();
 }
 
+Order::Order(const Order &other)
+{
+    // Copy constructor - copy all members from the other order
+    this->id = other.id;
+    this->strategy = other.strategy;
+    this->quantity = other.quantity;
+    this->price = other.price;
+    this->side = other.side;
+    this->type = other.type;
+    this->status = other.status;
+    this->created_at = other.created_at;
+}
+
 Order::~Order()
 {
 }

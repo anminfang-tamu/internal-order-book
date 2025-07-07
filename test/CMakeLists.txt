@@ -10,16 +10,15 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# Now add the test executable (includes all test files)
+# Now add the test executable (only test files, link with orderbook library)
 add_executable(general_tests 
     test_orderbook.cpp 
     test_order.cpp 
     test_matching_engine.cpp
-    ../src/Order.cpp 
-    ../src/OrderBook.cpp
-    ../src/MatchingEngine.cpp
 )
-target_link_libraries(general_tests gtest_main)
+
+# Link with our orderbook library (which already has Boost linked)
+target_link_libraries(general_tests gtest_main orderbook)
 
 # Add threading support for MatchingEngine tests
 find_package(Threads REQUIRED)

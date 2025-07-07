@@ -1,52 +1,61 @@
 #include "MatchingEngine.h"
+#include <chrono>
 
 MatchingEngine::MatchingEngine()
+    : order_queue_(1024), // Initialize with capacity of 1024 (power of 2)
+      stop_matching_engine_(false)
 {
     matching_engine_thread_ = std::thread(&MatchingEngine::match_loop, this);
 }
 
 MatchingEngine::~MatchingEngine()
 {
-    {
-        std::lock_guard<std::mutex> lock(order_queue_mutex_);
-        stop_matching_engine_ = true;
-    }
-    order_queue_cv_.notify_one();
+    stop_matching_engine_.store(true);
     if (matching_engine_thread_.joinable())
     {
         matching_engine_thread_.join();
+    }
+
+    // Clean up any remaining orders in the queue
+    Order *remaining_order;
+    while (order_queue_.pop(remaining_order))
+    {
+        delete remaining_order;
     }
 }
 
 void MatchingEngine::process_order(Order &order)
 {
+    // Create a copy of the order on the heap
+    Order *order_ptr = new Order(order);
+
+    // Lock-free push - if queue is full, this will return false
+    while (!order_queue_.push(order_ptr))
     {
-        std::lock_guard<std::mutex> lock(order_queue_mutex_);
-        order_queue_.push_back(std::move(order));
+        // Queue is full, could either:
+        // 1. Busy wait (current approach)
+        // 2. Drop the order
+        // 3. Expand queue capacity
+        std::this_thread::yield(); // Give other threads a chance
     }
-    order_queue_cv_.notify_one();
 }
 
 void MatchingEngine::match_loop()
 {
-    while (true)
+    while (!stop_matching_engine_.load())
     {
-        Order current_order;
+        Order *current_order_ptr;
 
+        // Lock-free pop - returns false if queue is empty
+        if (order_queue_.pop(current_order_ptr))
         {
-            std::unique_lock<std::mutex> lock(order_queue_mutex_);
-            order_queue_cv_.wait(lock, [this]
-                                 { return !order_queue_.empty() || stop_matching_engine_; });
-
-            if (stop_matching_engine_ || order_queue_.empty())
-            {
-                break;
-            }
-
-            current_order = order_queue_.front();
-            order_queue_.pop_front();
+            order_book_.match_orders(*current_order_ptr);
+            delete current_order_ptr; // Clean up after processing
         }
-
-        order_book_.match_orders(current_order);
+        else
+        {
+            // Queue is empty, small sleep to avoid busy waiting
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
     }
 }

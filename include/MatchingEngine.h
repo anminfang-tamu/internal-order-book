@@ -1,9 +1,9 @@
 #include "OrderBook.h"
 
-#include <queue>
-#include <mutex>
-#include <condition_variable>
+#include <boost/lockfree/queue.hpp>
 #include <thread>
+#include <atomic>
+#include <memory>
 
 class MatchingEngine
 {
@@ -14,10 +14,9 @@ public:
     void process_order(Order &order);
 
 private:
-    OrderQueue order_queue_;
-    std::mutex order_queue_mutex_;
-    std::condition_variable order_queue_cv_;
-    bool stop_matching_engine_ = false;
+    // Lock-free queue for order pointers (capacity must be power of 2)
+    boost::lockfree::queue<Order *> order_queue_;
+    std::atomic<bool> stop_matching_engine_;
     std::thread matching_engine_thread_;
 
     OrderBook order_book_;

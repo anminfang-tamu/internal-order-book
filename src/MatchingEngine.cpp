@@ -26,18 +26,18 @@ MatchingEngine::~MatchingEngine()
 
 void MatchingEngine::process_order(Order &order)
 {
-    // Create a copy of the order on the heap
-    Order *order_ptr = new Order(order);
+    // Create smart pointer for RAII and automatic cleanup
+    std::unique_ptr<Order> order_ptr = std::make_unique<Order>(order);
 
-    // Lock-free push - if queue is full, this will return false
-    while (!order_queue_.push(order_ptr))
+    // Extract raw pointer for the lock-free queue
+    Order *raw_ptr = order_ptr.get();
+
+    while (!order_queue_.push(raw_ptr))
     {
-        // Queue is full, could either:
-        // 1. Busy wait (current approach)
-        // 2. Drop the order
-        // 3. Expand queue capacity
-        std::this_thread::yield(); // Give other threads a chance
+        std::this_thread::yield();
     }
+
+    order_ptr.release();
 }
 
 void MatchingEngine::match_loop()
